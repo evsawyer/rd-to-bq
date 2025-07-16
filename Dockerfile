@@ -11,7 +11,7 @@ RUN uv sync --locked
 
 # Copy only the necessary application files
 COPY BigQueryClient.py .
-COPY RedditClient.py .
+COPY RedditAdsClient.py .
 COPY RedditToBigQueryPipeline.py .
 COPY main.py .
 
