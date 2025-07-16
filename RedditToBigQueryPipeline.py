@@ -127,7 +127,13 @@ class RedditToBigQueryPipeline:
                         try:
                             # Get campaigns for this ad account
                             campaigns = self.reddit_client.get_campaigns(account_id)
-                            campaign_map = {c['id']: c.get('name', 'Unknown') for c in campaigns}
+                            campaign_map = {
+                                c['id']: {
+                                    'name': c.get('name', 'Unknown'),
+                                    'objective': c.get('objective', 'Unknown'),
+                                    'goal_type': c.get('goal_type', 'Unknown')
+                                } for c in campaigns
+                            }
                             logger.info(f"      Found {len(campaigns)} campaigns")
                             
                             # Get ad groups for this ad account
@@ -156,7 +162,9 @@ class RedditToBigQueryPipeline:
                                     
                                     # Campaign information
                                     'campaign_id': ad.get('campaign_id'),
-                                    'campaign_name': campaign_map.get(ad.get('campaign_id'), 'Unknown'),
+                                    'campaign_name': campaign_map.get(ad.get('campaign_id'), {}).get('name', 'Unknown'),
+                                    'objective': campaign_map.get(ad.get('campaign_id'), {}).get('objective', 'Unknown'),
+                                    'goal_type': campaign_map.get(ad.get('campaign_id'), {}).get('goal_type', 'Unknown'),
                                     
                                     # Ad account information
                                     'ad_account_id': account_id,
@@ -301,18 +309,15 @@ class RedditToBigQueryPipeline:
                             breakdowns = ["ad_id", "date"]
                             fields = [
                                 "account_id", "campaign_id", "ad_group_id", "ad_id",
-                                "impressions", "reach", "frequency", 
-                                "spend", "clicks", "cpc", "ecpm", "ctr",
-                                # Reddit conversion metrics
-                                "reddit_leads", "app_install_view_content_count", "app_install_add_to_cart_count", 
-                                "app_install_mmp_checkout_count", "app_install_skan_checkout_count",
-                                "app_install_purchase_count",
-                                # ROAS
-                                "app_install_roas_double",
-                                # Video engagement
+
+
+                                "clicks", "conversion_lead_clicks", "reddit_leads", "conversion_page_visit_clicks", 
                                 "video_started", "video_watched_25_percent", "video_watched_50_percent", 
-                                "video_watched_75_percent", "video_watched_100_percent",
-                                "video_viewable_watched_15_seconds"
+                                "video_watched_75_percent", "video_watched_100_percent", "video_watched_3_seconds",
+
+                                "impressions", "reach", "frequency", "spend",  
+                                "conversion_view_content_clicks", "conversion_add_to_cart_clicks", 
+                                "conversion_purchase_clicks", "conversion_sign_up_clicks"
                             ]
                             
                             # Get insights report
@@ -441,27 +446,26 @@ class RedditToBigQueryPipeline:
                     frequency FLOAT64,
                     spend FLOAT64,
                     clicks INT64,
-                    cpc FLOAT64,
-                    ecpm FLOAT64,
-                    ctr FLOAT64,
+                    conversion_lead_clicks INT64,
                     reddit_leads INT64,
-                    app_install_view_content_count INT64,
-                    app_install_add_to_cart_count INT64,
-                    app_install_mmp_checkout_count INT64,
-                    app_install_skan_checkout_count INT64,
-                    app_install_purchase_count INT64,
-                    app_install_roas_double FLOAT64,
+                    conversion_page_visit_clicks INT64,
                     video_started INT64,
                     video_watched_25_percent INT64,
                     video_watched_50_percent INT64,
                     video_watched_75_percent INT64,
                     video_watched_100_percent INT64,
-                    video_viewable_watched_15_seconds INT64,
+                    video_watched_3_seconds INT64,
+                    conversion_view_content_clicks INT64,
+                    conversion_add_to_cart_clicks INT64,
+                    conversion_purchase_clicks INT64,
+                    conversion_sign_up_clicks INT64,
                     ad_name STRING,
                     ad_type STRING,
                     ad_status STRING,
                     ad_group_name STRING,
                     campaign_name STRING,
+                    objective STRING,
+                    goal_type STRING,
                     ad_account_name STRING,
                     ad_account_currency STRING,
                     ad_account_time_zone STRING,
@@ -484,27 +488,24 @@ class RedditToBigQueryPipeline:
                 SELECT 
                     CAST(t.date AS DATE) AS date,
                     t.ad_id,
-                    t.app_install_add_to_cart_count,
-                    t.app_install_mmp_checkout_count,
-                    t.app_install_purchase_count,
-                    t.app_install_roas_double,
-                    t.app_install_skan_checkout_count,
-                    t.app_install_view_content_count,
                     t.clicks,
-                    t.cpc,
-                    t.ctr,
-                    t.ecpm,
-                    t.frequency,
-                    t.impressions,
-                    t.reach,
+                    t.conversion_lead_clicks,
                     t.reddit_leads,
-                    t.spend,
+                    t.conversion_page_visit_clicks,
                     t.video_started,
                     t.video_watched_25_percent,
                     t.video_watched_50_percent,
                     t.video_watched_75_percent,
                     t.video_watched_100_percent,
-                    t.video_viewable_watched_15_seconds,
+                    t.video_watched_3_seconds,
+                    t.impressions,
+                    t.reach,
+                    t.frequency,
+                    t.spend,
+                    t.conversion_view_content_clicks,
+                    t.conversion_add_to_cart_clicks,
+                    t.conversion_purchase_clicks,
+                    t.conversion_sign_up_clicks,
                     t._loaded_at,
                     t._source,
                     r.ad_name,
@@ -514,6 +515,8 @@ class RedditToBigQueryPipeline:
                     r.ad_group_name,
                     r.campaign_id,
                     r.campaign_name,
+                    r.objective,
+                    r.goal_type,
                     r.ad_account_id,
                     r.ad_account_name,
                     r.ad_account_currency,
@@ -536,27 +539,26 @@ class RedditToBigQueryPipeline:
                     target.frequency = source.frequency,
                     target.spend = source.spend,
                     target.clicks = source.clicks,
-                    target.cpc = source.cpc,
-                    target.ecpm = source.ecpm,
-                    target.ctr = source.ctr,
+                    target.conversion_lead_clicks = source.conversion_lead_clicks,
                     target.reddit_leads = source.reddit_leads,
-                    target.app_install_view_content_count = source.app_install_view_content_count,
-                    target.app_install_add_to_cart_count = source.app_install_add_to_cart_count,
-                    target.app_install_mmp_checkout_count = source.app_install_mmp_checkout_count,
-                    target.app_install_skan_checkout_count = source.app_install_skan_checkout_count,
-                    target.app_install_purchase_count = source.app_install_purchase_count,
-                    target.app_install_roas_double = source.app_install_roas_double,
+                    target.conversion_page_visit_clicks = source.conversion_page_visit_clicks,
                     target.video_started = source.video_started,
                     target.video_watched_25_percent = source.video_watched_25_percent,
                     target.video_watched_50_percent = source.video_watched_50_percent,
                     target.video_watched_75_percent = source.video_watched_75_percent,
                     target.video_watched_100_percent = source.video_watched_100_percent,
-                    target.video_viewable_watched_15_seconds = source.video_viewable_watched_15_seconds,
+                    target.video_watched_3_seconds = source.video_watched_3_seconds,
+                    target.conversion_view_content_clicks = source.conversion_view_content_clicks,
+                    target.conversion_add_to_cart_clicks = source.conversion_add_to_cart_clicks,
+                    target.conversion_purchase_clicks = source.conversion_purchase_clicks,
+                    target.conversion_sign_up_clicks = source.conversion_sign_up_clicks,
                     target.ad_name = source.ad_name,
                     target.ad_type = source.ad_type,
                     target.ad_status = source.ad_status,
                     target.ad_group_name = source.ad_group_name,
                     target.campaign_name = source.campaign_name,
+                    target.objective = source.objective,
+                    target.goal_type = source.goal_type,
                     target.ad_account_name = source.ad_account_name,
                     target.ad_account_currency = source.ad_account_currency,
                     target.ad_account_time_zone = source.ad_account_time_zone,
@@ -567,26 +569,23 @@ class RedditToBigQueryPipeline:
             WHEN NOT MATCHED THEN
                 INSERT (
                     date, ad_id, ad_account_id, campaign_id, ad_group_id,
-                    impressions, reach, frequency, spend, clicks, cpc, ecpm, ctr,
-                    reddit_leads, app_install_view_content_count, app_install_add_to_cart_count,
-                    app_install_mmp_checkout_count, app_install_skan_checkout_count,
-                    app_install_purchase_count, app_install_roas_double,
+                    impressions, reach, frequency, spend, clicks, 
+                    conversion_lead_clicks, reddit_leads, conversion_page_visit_clicks,
                     video_started, video_watched_25_percent, video_watched_50_percent,
-                    video_watched_75_percent, video_watched_100_percent, video_viewable_watched_15_seconds,
-                    ad_name, ad_type, ad_status, ad_group_name, campaign_name,
+                    video_watched_75_percent, video_watched_100_percent, video_watched_3_seconds,
+                    conversion_view_content_clicks, conversion_add_to_cart_clicks, conversion_purchase_clicks, conversion_sign_up_clicks,
+                    ad_name, ad_type, ad_status, ad_group_name, campaign_name, objective, goal_type,
                     ad_account_name, ad_account_currency, ad_account_time_zone,
                     business_id, business_name, _loaded_at, _updated_at, _source
                 )
                 VALUES (
                     source.date, source.ad_id, source.ad_account_id, source.campaign_id, source.ad_group_id,
-                    source.impressions, source.reach, source.frequency, source.spend, source.clicks, 
-                    source.cpc, source.ecpm, source.ctr,
-                    source.reddit_leads, source.app_install_view_content_count, source.app_install_add_to_cart_count,
-                    source.app_install_mmp_checkout_count, source.app_install_skan_checkout_count,
-                    source.app_install_purchase_count, source.app_install_roas_double,
+                    source.impressions, source.reach, source.frequency, source.spend, source.clicks,
+                    source.conversion_lead_clicks, source.reddit_leads, source.conversion_page_visit_clicks,
                     source.video_started, source.video_watched_25_percent, source.video_watched_50_percent,
-                    source.video_watched_75_percent, source.video_watched_100_percent, source.video_viewable_watched_15_seconds,
-                    source.ad_name, source.ad_type, source.ad_status, source.ad_group_name, source.campaign_name,
+                    source.video_watched_75_percent, source.video_watched_100_percent, source.video_watched_3_seconds,
+                    source.conversion_view_content_clicks, source.conversion_add_to_cart_clicks, source.conversion_purchase_clicks, source.conversion_sign_up_clicks,
+                    source.ad_name, source.ad_type, source.ad_status, source.ad_group_name, source.campaign_name, source.objective, source.goal_type,
                     source.ad_account_name, source.ad_account_currency, source.ad_account_time_zone,
                     source.business_id, source.business_name, source._loaded_at, source._updated_at, source._source
                 )
@@ -656,8 +655,8 @@ def main():
     """Main execution function"""
     # Set up command line arguments
     parser = argparse.ArgumentParser(description='Sync Reddit Ads data to BigQuery')
-    parser.add_argument('--days-back', type=int, default=60, 
-                        help='Number of days of historical data to fetch (default: 60)')
+    parser.add_argument('--days-back', type=int, default=7, 
+                        help='Number of days of historical data to fetch (default: 7)')
     parser.add_argument('--skip-reference', action='store_true',
                         help='Skip syncing ads reference table')
     args = parser.parse_args()

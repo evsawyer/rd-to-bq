@@ -6,10 +6,13 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "db-dtypes>=1.4.3",
+    "fastapi>=0.116.1",
     "google-cloud-bigquery>=3.34.0",
     "pandas>=2.3.1",
     "pandas-gbq>=0.29.2",
     "pyarrow>=20.0.0",
+    "pydantic>=2.11.7",
     "python-dotenv>=1.1.1",
     "requests>=2.32.4",
+    "uvicorn>=0.35.0",
 ]
